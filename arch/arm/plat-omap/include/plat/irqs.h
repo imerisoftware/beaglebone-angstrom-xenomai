@@ -30,6 +30,7 @@
 
 /* All OMAP4 specific defines are moved to irqs-44xx.h */
 #include "irqs-44xx.h"
+#include "irqs-33xx.h"
 
 /*
  * IRQ numbers for interrupt handler 1
@@ -357,7 +358,7 @@
 #define INT_35XX_EMAC_C0_TX_PULSE_IRQ	69
 #define INT_35XX_EMAC_C0_MISC_PULSE_IRQ	70
 #define INT_35XX_USBOTG_IRQ		71
-#define INT_35XX_UART4			84
+#define INT_35XX_UART4_IRQ		84
 #define INT_35XX_CCDC_VD0_IRQ		88
 #define INT_35XX_CCDC_VD1_IRQ		92
 #define INT_35XX_CCDC_VD2_IRQ		93

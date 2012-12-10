@@ -17,7 +17,7 @@
 #include <mach/hardware.h>
 #include <asm/ipipe.h>
 #include <asm/mach/irq.h>
-
+#include <asm/exception.h>
 
 /* selected INTC register offsets */
 
@@ -37,6 +37,11 @@
 /* Number of IRQ state bits in each MIR register */
 #define IRQ_BITS_PER_REG	32
 
+#define OMAP2_IRQ_BASE		OMAP2_L4_IO_ADDRESS(OMAP24XX_IC_BASE)
+#define OMAP3_IRQ_BASE		OMAP2_L4_IO_ADDRESS(OMAP34XX_IC_BASE)
+#define INTCPS_SIR_IRQ_OFFSET	0x0040	/* omap2/3 active interrupt offset */
+#define ACTIVEIRQ_MASK		0x7f	/* omap2/3 active interrupt b */
+
 #if !defined(MULTI_OMAP1) && !defined(MULTI_OMAP2)
 #define inline_single inline
 #else
@@ -52,10 +57,12 @@
 static struct omap_irq_bank {
 	void __iomem *base_reg;
 	unsigned int nr_irqs;
+	unsigned int nr_regs_req;
 } __attribute__ ((aligned(4))) irq_banks[] = {
 	{
 		/* MPU INTC */
 		.nr_irqs	= 96,
+		.nr_regs_req	= 3,
 	},
 };
 
@@ -165,6 +172,7 @@ static void __init omap_init_irq(u32 base, int nr_irqs)
 	unsigned long nr_of_irqs = 0;
 	unsigned int nr_banks = 0;
 	int i, j;
+	void __iomem *omap_irq_base;
 
 	omap_irq_base = ioremap(base, SZ_4K);
 	if (WARN_ON(!omap_irq_base))
@@ -205,9 +213,45 @@ void __init omap3_init_irq(void)
 	omap_init_irq(OMAP34XX_IC_BASE, 96);
 }
 
-void __init ti816x_init_irq(void)
+void __init ti81xx_init_irq(void)
 {
 	omap_init_irq(OMAP34XX_IC_BASE, 128);
+}
+
+static inline void omap_intc_handle_irq(void __iomem *base_addr,
+		unsigned int no_regs_req, struct pt_regs *regs)
+{
+	u32 irqnr = 0;
+
+	do {
+		int i = 0;
+
+		for (i = 0; i < no_regs_req; i++) {
+			irqnr = readl_relaxed(base_addr + 0x98 + (0x20 * i));
+			if (irqnr)
+				goto out;
+		}
+
+out:
+		if (!irqnr)
+			break;
+
+		irqnr = readl_relaxed(base_addr + INTCPS_SIR_IRQ_OFFSET);
+		irqnr &= ACTIVEIRQ_MASK;
+
+		if (irqnr)
+		{
+//			handle_IRQ(irqnr, regs); //change this to ipipe_handle_multi_irq
+			ipipe_handle_multi_irq(irqnr, regs); 
+		}
+
+	} while (irqnr);
+}
+
+asmlinkage void __exception_irq_entry omap2_intc_handle_irq(struct pt_regs *regs)
+{
+	void __iomem *base_addr = OMAP2_IRQ_BASE;
+	omap_intc_handle_irq(base_addr, irq_banks[0].nr_regs_req, regs);
 }
 
 #if defined(CONFIG_IPIPE) && defined(CONFIG_ARCH_OMAP2PLUS)
@@ -347,5 +391,11 @@ void omap3_intc_resume_idle(void)
 {
 	/* Re-enable autoidle */
 	intc_bank_write_reg(1, &irq_banks[0], INTC_SYSCONFIG);
+}
+
+asmlinkage void __exception_irq_entry omap3_intc_handle_irq(struct pt_regs *regs)
+{
+	void __iomem *base_addr = OMAP3_IRQ_BASE;
+	omap_intc_handle_irq(base_addr, irq_banks[0].nr_regs_req, regs);
 }
 #endif /* CONFIG_ARCH_OMAP3 */
