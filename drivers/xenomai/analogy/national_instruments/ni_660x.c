@@ -1,0 +1,1 @@
+/home/chao/Work/Beaglebone/xenomai-2.6.1/ksrc/drivers/analogy/national_instruments/ni_660x.c
